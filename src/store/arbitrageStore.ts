@@ -1,8 +1,9 @@
-import {create} from "zustand";
-import type {ArbitrageRow, FundingRates} from "../api/types";
+import { create } from "zustand";
+import type { ArbitrageRow } from "../api/types";
 
 interface ArbitrageStore {
-  rates: Record<string, FundingRates>;
+  // rates[exchange][asset] = rate
+  rates: Record<string, Record<string, number>>;
   updateRate: (exchange: string, asset: string, rate: number) => void;
   getSpread: (left: string, right: string) => ArbitrageRow[];
 }
@@ -11,24 +12,35 @@ export const useArbitrageStore = create<ArbitrageStore>((set, get) => ({
   rates: {},
 
   updateRate(exchange, asset, rate) {
-    set((state) => ({
-      rates: {
-        ...state.rates,
-        [asset]: {
-          ...state.rates[asset],
-          [exchange]: rate,
+    console.log("[updateRate]", exchange, asset, rate);
+
+    set((state) => {
+      const ex = state.rates[exchange] || {};
+
+      return {
+        rates: {
+          ...state.rates,
+          [exchange]: {
+            ...ex,
+            [asset]: rate,
+          },
         },
-      },
-    }));
+      };
+    });
   },
 
-  getSpread(left, right) {
-    const rates = get().rates;
+  getSpread(leftId, rightId) {
+    const { rates } = get();
+
+    const left = rates[leftId] || {};
+    const right = rates[rightId] || {};
+
     const rows: ArbitrageRow[] = [];
 
-    for (const asset in rates) {
-      const L = rates[asset][left];
-      const R = rates[asset][right];
+    for (const asset of Object.keys(left)) {
+      const L = left[asset];
+      const R = right[asset];
+
       if (L == null || R == null) continue;
 
       const spread = L - R;
@@ -42,8 +54,8 @@ export const useArbitrageStore = create<ArbitrageStore>((set, get) => ({
         apy,
         strategy:
           spread > 0
-            ? `Long ${right.toUpperCase()} / Short ${left.toUpperCase()}`
-            : `Long ${left.toUpperCase()} / Short ${right.toUpperCase()}`,
+            ? `Long ${rightId.toUpperCase()} / Short ${leftId.toUpperCase()}`
+            : `Long ${leftId.toUpperCase()} / Short ${rightId.toUpperCase()}`,
       });
     }
 

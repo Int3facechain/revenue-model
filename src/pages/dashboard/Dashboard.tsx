@@ -1,5 +1,4 @@
 import {useEffect} from "react";
-import {startEngineMock} from "../../engine/wsEngine";
 
 import {useExchangeStore} from "../../store/exchangeStore";
 import {useArbitrageStore} from "../../store/arbitrageStore";
@@ -8,19 +7,22 @@ import ExchangeSelector from "./components/ExchangeSelector";
 import SettingsPanel from "./components/SettingsPanel";
 import StatsGrid from "./components/StatsGrid";
 import ArbitrageTable from "./components/ArbitrageTable";
+import {startEngine} from "../../engine/engine";
 
 export default function Dashboard() {
   useEffect(() => {
-    startEngineMock();
+    startEngine();
   }, []);
 
   const pair = useExchangeStore((s) => s.pair);
   const setPair = useExchangeStore((s) => s.setPair);
 
-  useArbitrageStore((s) => s.rates);
-  const getSpread = useArbitrageStore.getState().getSpread;
+  const rates = useArbitrageStore((s) => s.rates);
+  const rows = useArbitrageStore.getState().getSpread(pair.left, pair.right);
 
-  const rows = getSpread(pair.left, pair.right);
+  console.log("[Dashboard] pair:", pair);
+  console.log("[Dashboard] rates:", rates);
+  console.log("[Dashboard] rows:", rows);
 
   return (
     <div className="pt-16">
