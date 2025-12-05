@@ -25,7 +25,6 @@ export class AsterClient implements ExchangeStreamClient {
   private ws: WebSocket | null = null;
   private stopped = false;
   private readonly url = "wss://fstream.asterdex.com/stream";
-
   private readonly onUpdate: FundingUpdateHandler;
 
   constructor(onUpdate: FundingUpdateHandler) {
@@ -48,6 +47,7 @@ export class AsterClient implements ExchangeStreamClient {
   private connect(): void {
     if (this.stopped) return;
 
+    console.log("[Aster] connecting to", this.url);
     const ws = new WebSocket(this.url);
     this.ws = ws;
 
@@ -60,54 +60,85 @@ export class AsterClient implements ExchangeStreamClient {
       ws.send(JSON.stringify(payload));
     };
 
-    ws.onmessage = event => {
+    ws.onmessage = (event) => {
+      console.log("[Aster] raw message:", event.data);
+
+      let msg: any;
       try {
-        const msg = JSON.parse(event.data as string);
-
-        const data = Array.isArray(msg) ? msg : msg.data;
-        if (!Array.isArray(data)) {
-          return;
-        }
-
-        for (const entry of data) {
-          if (!entry || typeof entry.s !== "string") continue;
-
-          const symbol = (entry.s as string).toUpperCase();
-          const asset = ASTER_ASSET_BY_SYMBOL[symbol];
-          if (!asset) continue;
-
-          const rateStr = entry.r as string | undefined;
-          if (!rateStr) continue;
-
-          const rate = Number(rateStr);
-          if (!Number.isFinite(rate)) continue;
-
-          const markPriceStr = entry.p as string | undefined;
-          const indexPriceStr = entry.i as string | undefined;
-
-          this.onUpdate({
-            exchangeId: "aster",
-            asset,
-            rate,
-            markPrice: markPriceStr ? Number(markPriceStr) : undefined,
-            indexPrice: indexPriceStr ? Number(indexPriceStr) : undefined,
-            timestamp: typeof entry.E === "number" ? entry.E : Date.now(),
-          });
-        }
+        msg = JSON.parse(event.data as string);
       } catch (error) {
-        console.error("aster ws parse error", error);
+        console.error("[Aster] parse error:", error);
+        return;
+      }
+
+      const data = Array.isArray(msg) ? msg : msg?.data;
+      if (!Array.isArray(data)) {
+        return;
+      }
+
+      for (const entry of data) {
+        if (!entry || typeof entry.s !== "string") {
+          continue;
+        }
+
+        const symbol = String(entry.s).toUpperCase();
+        const asset = ASTER_ASSET_BY_SYMBOL[symbol];
+        if (!asset || !this.isSupportedAsset(asset)) {
+          continue;
+        }
+
+        const rateStr = entry.r as string | undefined;
+        if (!rateStr) continue;
+
+        const rate = Number(rateStr);
+        if (!Number.isFinite(rate)) {
+          continue;
+        }
+
+        const markPriceStr = entry.p as string | undefined;
+        const indexPriceStr = entry.i as string | undefined;
+
+        const markPx =
+          markPriceStr != null ? Number(markPriceStr) : undefined;
+        const indexPx =
+          indexPriceStr != null ? Number(indexPriceStr) : undefined;
+
+        const tsRaw = entry.E;
+        const ts =
+          typeof tsRaw === "number" && Number.isFinite(tsRaw)
+            ? tsRaw
+            : Date.now();
+
+        this.onUpdate({
+          exchangeId: "aster",
+          asset,
+          rate,
+          markPrice: Number.isFinite(markPx as number)
+            ? (markPx as number)
+            : undefined,
+          indexPrice: Number.isFinite(indexPx as number)
+            ? (indexPx as number)
+            : undefined,
+          timestamp: ts,
+        });
       }
     };
 
-    ws.onclose = () => {
+    ws.onerror = (err) => {
+      console.error("[Aster] ws error:", err);
+      ws.close();
+    };
+
+    ws.onclose = (ev) => {
+      console.warn("[Aster] ws closed:", ev.code, ev.reason);
       this.ws = null;
       if (!this.stopped) {
         setTimeout(() => this.connect(), 5000);
       }
     };
+  }
 
-    ws.onerror = () => {
-      ws.close();
-    };
+  private isSupportedAsset(asset: string): asset is AssetSymbol {
+    return (ASSETS as readonly string[]).includes(asset);
   }
 }

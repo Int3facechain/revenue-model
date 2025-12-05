@@ -1,4 +1,4 @@
-import {ASSETS, type AssetSymbol, type ExchangeStreamClient, type FundingUpdateHandler} from "../types.ts";
+import {ASSETS, type AssetSymbol, type ExchangeStreamClient, type FundingUpdateHandler,} from "../types";
 
 export class HyperliquidClient implements ExchangeStreamClient {
   private ws: WebSocket | null = null;
@@ -31,6 +31,7 @@ export class HyperliquidClient implements ExchangeStreamClient {
     this.ws = ws;
 
     ws.onopen = () => {
+      console.log("[HL] ws open, subscribing to assets:", ASSETS);
       ASSETS.forEach((asset) => {
         const payload = {
           method: "subscribe",
@@ -45,6 +46,7 @@ export class HyperliquidClient implements ExchangeStreamClient {
 
     ws.onmessage = (event) => {
       console.log("[HL] raw message:", event.data);
+
       let msg: any;
       try {
         msg = JSON.parse(event.data as string);
@@ -81,15 +83,26 @@ export class HyperliquidClient implements ExchangeStreamClient {
         return;
       }
 
-      const markPx = ctx.markPx != null ? Number(ctx.markPx) : undefined;
-      const oraclePx = ctx.oraclePx != null ? Number(ctx.oraclePx) : undefined;
+      console.log(`[HL] Funding update ${coin}:`, {
+        raw: ctx.funding,
+        parsed: rate,
+      });
+
+      const markPx =
+        ctx.markPx != null ? Number(ctx.markPx) : undefined;
+      const oraclePx =
+        ctx.oraclePx != null ? Number(ctx.oraclePx) : undefined;
 
       this.onUpdate({
         exchangeId: "hyperliquid",
-        asset: coin,
+        asset: coin as AssetSymbol,
         rate,
-        markPrice: Number.isFinite(markPx!) ? markPx : undefined,
-        indexPrice: Number.isFinite(oraclePx!) ? oraclePx : undefined,
+        markPrice: Number.isFinite(markPx as number)
+          ? (markPx as number)
+          : undefined,
+        indexPrice: Number.isFinite(oraclePx as number)
+          ? (oraclePx as number)
+          : undefined,
         timestamp: Date.now(),
       });
     };

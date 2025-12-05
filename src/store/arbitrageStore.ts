@@ -2,7 +2,6 @@ import { create } from "zustand";
 import type { ArbitrageRow } from "../api/types";
 
 interface ArbitrageStore {
-  // rates[exchange][asset] = rate
   rates: Record<string, Record<string, number>>;
   updateRate: (exchange: string, asset: string, rate: number) => void;
   getSpread: (left: string, right: string) => ArbitrageRow[];
